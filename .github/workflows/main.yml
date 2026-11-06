@@ -1,0 +1,68 @@
+name: Build and deploy docs dummy
+
+on:
+  push:
+    branches: [main]
+  repository_dispatch:
+    types: [documentation_updated]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-dummy-staging
+  cancel-in-progress: false
+
+jobs:
+  build-deploy:
+    runs-on: [self-hosted, linux, x64, docs-deploy]
+    env:
+      RELEASE_ID: "${{ github.run_id }}-${{ github.run_attempt }}"
+      DEPLOY_PATH: "/var/www/docs-dummy"
+      DEPLOY_HOST: "${{ secrets.STAGING_HOST }}"
+      DEPLOY_USER: "${{ secrets.STAGING_USER }}"
+
+    steps:
+      - name: Check out docs dummy
+        uses: actions/checkout@v4
+
+      - name: Build tarball
+        id: bundle
+        shell: bash
+        run: |
+          chmod +x scripts/build-bundle.sh
+          bundle="$(./scripts/build-bundle.sh "$RELEASE_ID")"
+          echo "bundle=$bundle" >> "$GITHUB_OUTPUT"
+
+      - name: Configure SSH host verification
+        shell: bash
+        run: |
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "${{ secrets.STAGING_KNOWN_HOSTS }}" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/known_hosts"
+
+      - name: Load deployment key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.STAGING_SSH_KEY }}
+
+      - name: Upload release bundle
+        shell: bash
+        run: |
+          scp "${{ steps.bundle.outputs.bundle }}" \
+            "$DEPLOY_USER@$DEPLOY_HOST:/tmp/docs-dummy-${RELEASE_ID}.tar.gz"
+
+      - name: Deploy, health-check, and rollback on failure
+        shell: bash
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+            "bash -s -- '$DEPLOY_PATH' '$RELEASE_ID' '/tmp/docs-dummy-${RELEASE_ID}.tar.gz'" \
+            < scripts/remote-deploy.sh
+
+      - name: Publish bundle for inspection
+        uses: actions/upload-artifact@v4
+        with:
+          name: docs-dummy-${{ env.RELEASE_ID }}
+          path: ${{ steps.bundle.outputs.bundle }}
+          retention-days: 14
