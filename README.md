@@ -1,3 +1,6 @@
+Greetings from Encryption Consulting, this is the Updated Documentation of the Employee Portal..
+Verifying Changes, successful or not.
+
 # docs-dummy staging deployment
 
 This repository is a safe staging replica of the planned documentation deployment. It publishes a small static site to the Ubuntu staging VM through the self-hosted GitHub Actions runner.
