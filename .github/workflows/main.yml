@@ -18,7 +18,7 @@ jobs:
   build-deploy:
     runs-on:
       group: EC-Docs
-      labels: docs-deploy
+      labels: [self-hosted, linux, x64, docs-deploy]
     env:
       RELEASE_ID: "${{ github.run_id }}-${{ github.run_attempt }}"
       DEPLOY_PATH: "/var/www/docs-dummy"
